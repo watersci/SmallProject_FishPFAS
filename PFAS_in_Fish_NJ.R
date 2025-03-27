@@ -4,6 +4,8 @@ library(tidyverse)
 library(factoextra)
 library(ggfortify)
 library(vegan)
+library(RColorBrewer)
+
 
 # Get PFAS parameters (tissue-based, with units)
 pfas_parameters <- parameterCdFile %>%
@@ -112,6 +114,12 @@ adonis_result <- adonis2(pfas_comp ~ cluster, data = pfas_wide_geo[matching_rows
 
 print(adonis_result)
 
+pfas_wide_geo <- pfas_wide_geo %>%
+  mutate(
+    total_pfas = rowSums(select(., 3:10), na.rm = TRUE)
+  )
+
+
 pfas_relative <- pfas_wide_geo %>%
   mutate(across(3:10, ~ . / total_pfas, .names = "rel_{.col}"))
 
@@ -144,3 +152,51 @@ ggplot(pfas_relative_long, aes(x = cluster, y = relative_value, fill = compound)
   scale_x_discrete(labels = c("1" = "Pre 2011", "2" = "Post 2011")) +
   theme_minimal()
 
+
+pfas_polar <- pfas_relative_long %>%
+  group_by(cluster, compound) %>%
+  summarise(mean_prop = mean(relative_value, na.rm = TRUE), .groups = "drop")
+
+
+
+# Choose an aquatic-friendly palette
+fish_nature_palette <- c(
+  "#1b4332",  # deep forest green
+  "#2a6f4e",  # medium green
+  "#40916c",  # softer green
+  "#caf0f8",  # pale water blue
+  "#00b4d8",  # lighter blue
+  "#0077b6",  # ocean blue
+  "#7f4f24",  # dark brown
+  "#ddb892"   # light tan
+)
+
+facet_labels <- c(
+  "1" = "Pre 2011\n────────────",
+  "2" = "Post 2011\n────────────"
+)
+
+ggplot(pfas_polar, aes(x = compound, y = mean_prop, fill = compound)) +
+  geom_bar(stat = "identity", width = 1, color = "black", size = 0.3) +
+  coord_polar() +
+  facet_wrap(~ cluster, labeller = as_labeller(facet_labels)) +
+  scale_fill_manual(values = fish_nature_palette) +
+  scale_y_sqrt(labels = scales::percent_format(accuracy = 1)) +
+labs(
+    title = "PFAS Fingerprint in White Perch by Time Period",
+    subtitle = "Based on mean proportion of PFAS in NJ fish tissue samples",
+    y = NULL, x = NULL
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    axis.text.y = element_blank(),
+    axis.text.x = element_text(
+      angle = 50, vjust = 0.5, hjust = 1, size = 11, face = "bold"
+    ),
+    axis.ticks = element_blank(),
+    panel.grid.major = element_line(color = "gray90", size = 0.1),
+    strip.text = element_text(face = "bold", size = 14),
+    plot.title = element_text(face = "bold", size = 16),
+    plot.subtitle = element_text(size = 12, color = "gray40"),
+    legend.position = "none"
+  )
